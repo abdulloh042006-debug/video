@@ -1,0 +1,9 @@
+numpy
+opencv-python-headless
+pillow
+scipy
+librosa
+soundfile
+rembg
+onnxruntime
+# system: ffmpeg (x264 + aac)

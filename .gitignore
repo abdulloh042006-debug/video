@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+out/_parts_*/
+assets/audio/track_90s.wav
+assets/audio/_cut.wav
