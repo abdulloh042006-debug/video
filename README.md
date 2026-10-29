@@ -41,7 +41,7 @@ toj, dizzy yulduzlar, spotlight, YTP uslubidagi negativ miltillash.
   silliq oshirildi (A −1.5 dB, B +14 dB, C +9 dB), shuning uchun hech qayerda “pumping” eshitilmaydi. Istasangiz
   `tools/audio_prep.py` dagi `GAIN_DB` ni nolga qo‘ying.
 * Beat xaritasi (`beats.json`) librosa bilan chiqarilgan; vizual urg‘ular o‘lchangan kechikish bo‘yicha 40 ms oldinga
-  surilgan (3 ms flux bilan tekshirilgan, video bo‘yicha o‘rtacha xato ≈ 0–17 ms).
+  surilgan (3 ms flux bilan tekshirilgan; tayyor videoda flesh/urg‘ular audio onset’dan o‘rtacha ≈10 ms farq qiladi, 84% i ±50 ms ichida).
 
 ## Qayta yaratish
 
