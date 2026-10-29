@@ -34,6 +34,19 @@ Motion graphics (matnsiz): halqalar, sparkle, starburst, halftone, god-rays, tez
 yomg‘iri, rang-blok wipe, EQ halqa, ko‘zgu shar, soat, ter tomchilari, viewfinder, polaroid, poyga chiroqlari,
 toj, dizzy yulduzlar, spotlight, YTP uslubidagi negativ miltillash.
 
+## Personajlar: stikerdan hajmli qahramonga
+
+Oq “stiker” konturi olib tashlandi, o‘rniga (`engine/sprites.py`, `engine/world.py`):
+
+* **Rig (mesh deformatsiya):** nafas olish, tana egilishi, bosh qimirlashi, quloq silkinishi va pirpirashi, Nick dumi,
+  Gazelle yubkasi, Lion yolsi, sabzi barglari, Flash qo‘li, toshbaqa oyoqlari, ko‘z qisish (blink). Ular
+  beat’ga va o‘z tezligiga javob beradi (harakat yo‘nalishiga teskari “drag”).
+* **Yorug‘lik:** xona yorug‘ligiga moslashadi, pastga qarab ambient-occlusion, uzoqdagilarga havo xiraligi,
+  va sahnadagi rangli rim-light (ekran, disco, roar, build-up, final).
+* **Soya va aks:** polga tushgan siluet soya + kontakt soya + plitkadagi xira aks.
+* **3D:** aylanishlar haqiqiy perspektiva (yaw) bilan, tez harakatda motion smear, fondagi bust’larda DOF.
+* Chekkalardagi eski fon rangi tozalandi (decontaminate), yengil sharpen + film grain.
+
 ## Musiqa
 
 * Trek 5:54 — `0:00–1:30` olindi, oxirida 0.9 s fade-out.

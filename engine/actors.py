@@ -1,6 +1,7 @@
 """Actors: position segments + additive modifiers (squash, groove, wobble ...) evaluated per frame."""
 import math
 import bisect
+import zlib
 
 import numpy as np
 
@@ -63,6 +64,9 @@ class Actor:
         self.shadow_w = 0.5    # contact shadow width as a fraction of the sprite height
         self.flat = False
         self.bright = 1.0
+        self.phase = (zlib.crc32(key.encode()) % 6283) / 1000.0     # per-actor offset for idle motion
+        self.dof = 0.0                                              # depth-of-field blur radius (px)
+        self.rig_k = 1.0                                            # strength of the secondary motion
 
     # ---- visibility / pose ---------------------------------------------------
     def show(self, t):
@@ -182,7 +186,7 @@ class Actor:
 
         def fn(t, h):
             u = ease(clamp((c(t) - a) / (b - a)))
-            return dict(sx=math.cos(u * turns * 2 * math.pi))
+            return dict(yaw=u * turns * 360.0)
         return self.mod(t0, t1, fn)
 
     def tumble(self, t0, t1, deg):
@@ -260,7 +264,7 @@ class Actor:
         for (tt, s, f) in self.poses:
             if tt <= t:
                 sprite, flip = s, f
-        st = dict(x=x, y=y, z=z, sx=1.0, sy=1.0, sc=1.0, rot=so_rot, alpha=1.0, flash=0.0, dx=0.0, dy=0.0, zr=0.0,
+        st = dict(x=x, y=y, z=z, sx=1.0, sy=1.0, sc=1.0, rot=so_rot, alpha=1.0, flash=0.0, dx=0.0, dy=0.0, zr=0.0, yaw=0.0, pitch=0.0,
                   sprite=sprite, flip=flip)
         hpx0 = self.hm * ppm(y)
         for (t0, t1, fn) in self.mods:

@@ -1705,6 +1705,59 @@ def act3(w):
     w.zoom.to(tf_ + 0.5, 90.0, 1.025, in_out_quad)
 
 
+def add_rims(w):
+    """Coloured rim lights: the cast catches the colour of whatever lights the room (rays, disco, carrot glow ...)."""
+    cv = lambda c: np.array(c, np.float32)
+
+    def build_rays(t):
+        if t < A(30) or t >= THAW:
+            return []
+        tt = wt(t)
+        u = clamp((tt - A(30)) / 1.2)
+        col = [PINK, PURPLE, CYAN][int((tt - A(30)) / 0.43 / 2) % 3]
+        return [(0.0, -1.0, cv(col), 0.55 * u)]
+    w.rim_fx.append((A(30), THAW, build_rays))
+
+    def calm_rays(t):
+        u = clamp((t - THAW) / 0.8) * clamp((B(16) - t) / 0.8)
+        col = [PINK, PURPLE, CYAN][int((wt(t) - THAW) / 0.4575 / 2) % 3]
+        return [(0.0, -1.0, cv(col), 0.4 * u)]
+    w.rim_fx.append((THAW, B(16), calm_rays))
+
+    def disco(t):
+        bi = int(np.searchsorted(BB, t, side="right")) - 1
+        dt = t - BB[bi]
+        k = 0.38 + 0.35 * math.exp(-dt * 6)
+        return [(-0.9, -0.4, cv(PAL[bi % 7]), k), (0.9, -0.4, cv(PAL[(bi + 3) % 7]), k), (0.0, -1.0, cv(YELLOW), 0.18)]
+    w.rim_fx.append((B(48), B(64) + 0.3, disco))
+
+    def roar(t):
+        dt = t - B(100)
+        return [(0.0, -1.0, cv(WHITE), 0.9 * math.exp(-dt * 4.5)), (-1.0, 0.0, cv(ORANGE), 0.6 * math.exp(-dt * 4.5))]
+    w.rim_fx.append((B(100), B(100) + 1.2, roar))
+
+    def buildup(t):
+        k = clamp((t - B(116)) / (HOLD2 - B(116)))
+        return [(0.0, -1.0, cv((255, 245, 225)), 0.15 + 0.95 * k * k), (0.0, 1.0, cv((230, 235, 255)), 0.35 * k)]
+    w.rim_fx.append((B(112), BOOM, buildup))
+
+    def party(t):
+        bi = int(np.searchsorted(BC, t, side="right")) - 1
+        dt = t - BC[max(bi, 0)]
+        k = 0.36 + 0.32 * math.exp(-dt * 6)
+        if t < C(3):
+            k *= 1.2
+        return [(-0.85, -0.5, cv(PAL[bi % 7]), k), (0.85, -0.5, cv(PAL[(bi + 2) % 7]), k), (0.0, -1.0, cv(WHITE), 0.3)]
+    w.rim_fx.append((BOOM, C(19), party))
+
+    def final(t):
+        u = clamp((t - C(18)) / 0.8)
+        dt = t - C(20)
+        pop = math.exp(-dt * 5) if dt > 0 else 0.0
+        return [(0.0, -1.0, cv((255, 238, 215)), 0.22 * u + 0.6 * pop), (-0.8, -0.3, cv(PINK), 0.18 * u), (0.8, -0.3, cv(CYAN), 0.18 * u)]
+    w.rim_fx.append((C(18), 91, final))
+
+
 def build():
     w = World()
     act1(w)
@@ -1717,4 +1770,8 @@ def build():
     act2_v7(w)
     act2_v8(w)
     act3(w)
+    add_rims(w)
+    for k_ in ("claw", "flash", "judy_b", "nick_b"):
+        if k_ in w.actors:
+            w.actors[k_].dof = 1.1
     return w

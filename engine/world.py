@@ -4,7 +4,7 @@ import math
 import cv2
 import numpy as np
 
-from .common import W, H, FPS, clamp, lerp, ppm, smooth, PINK, CYAN, WHITE
+from .common import W, H, FPS, clamp, lerp, ppm, smooth, near_beat, PINK, CYAN, WHITE
 from . import sprites as sp
 from .actors import Actor, Track
 from .room import Room
@@ -43,6 +43,7 @@ class World:
         self.fx_back = []
         self.fx_front = []
         self.fx_screen = []
+        self.rim_fx = []                            # (t0, t1, fn(t) -> [(lx, ly, bgr, k), ...]) coloured rim lights
         self.inverts = []                           # (t0, t1) colour-negative flashes (YTP style)
         self.thaw = None                            # (t0, dur, angle_deg): colour floods back across the frame
         self.captures = {}                          # polaroid captures {t: small frame}
@@ -132,31 +133,20 @@ class World:
                 st = self.actors[k].state(t, self)
                 if st is not None:
                     states[k] = st
+        sp.GRAIN_SEED = int(round(t * FPS)) * 7919
+        expo = self.expo(t)
+        amb = 0.34 + 0.66 * expo ** 0.85
+        rims = []
+        if screen_img is not None and proj > 0.01:
+            mean = np.array(screen_img.reshape(-1, 3).mean(0), np.float32)
+            rims.append((0.0, -1.0, mean * 0.85, 0.50 * proj))            # the screen back-lights the cast
+        for (t0, t1, fn) in self.rim_fx:
+            if t0 <= t < t1:
+                rims += fn(t)
         for k, st in sorted(states.items(), key=lambda kv: kv[1]["y"] + kv[1]["actor"].layer):
-            a = st["actor"]
             if st["alpha"] <= 0.003:
                 continue
-            spr = sp.get(st["sprite"], a.outline)
-            hpx = st["hpx"]
-            yb = st["y"] - st["z"]
-            if a.shadow and st["sc"] > 0.02:
-                lift = clamp(st["z"] / max(hpx * 0.9, 1))
-                sw = hpx * a.shadow_w
-                sp.shadow(canvas, st["x"] + st["dx"], st["y"], sw * (1 if not a.flat else 1), 0.5 * st["alpha"],
-                          squash=0.26, lift=lift)
-                sp.shadow(canvas, st["x"] + st["dx"], st["y"], sw * 0.55, 0.45 * st["alpha"], squash=0.22, lift=lift)
-            sp.blit(canvas, spr, st["x"] + st["dx"], yb + st["dy"], hpx, sx=st["sx"], sy=st["sy"], rot=st["rot"],
-                    flip=st["flip"], alpha=st["alpha"], flash=st["flash"], anchor=a.anchor,
-                    clip=room.screen_clip if st["clip"] else None, bright=a.bright)
-            for (tt0, tt1, n, dt) in a.trails:
-                if tt0 <= t < tt1:
-                    for i in range(1, n + 1):
-                        s2 = a.state(t - dt * i, self)
-                        if s2 is None:
-                            continue
-                        sp.blit(canvas, sp.get(s2["sprite"], a.outline), s2["x"] + s2["dx"],
-                                s2["y"] - s2["z"] + s2["dy"], s2["hpx"], sx=s2["sx"], sy=s2["sy"], rot=s2["rot"],
-                                flip=s2["flip"], alpha=0.34 / i, anchor=a.anchor, bright=a.bright)
+            self.draw_actor(canvas, st, t, amb, rims)
         for (t0, t1, fn) in self.fx_front:
             if t0 <= t < t1:
                 fn(canvas, t)
@@ -170,6 +160,102 @@ class World:
         if not with_post:
             return canvas
         return self.post(canvas, t)
+
+    # ---- one character ----------------------------------------------------------------------------
+    def rig_params(self, a, st, prev, t):
+        """Secondary motion: idle breathing/sway, beat kicks, and drag from the actor's own velocity."""
+        cfg = sp.RIG.get(st["sprite"])
+        if cfg is None:
+            return None
+        k, ph = a.rig_k, a.phase
+        hpx = max(st["hpx"], 1.0)
+        vx = vy = 0.0
+        if prev is not None:
+            vx = (st["x"] + st["dx"] - prev["x"] - prev["dx"]) * FPS / hpx
+            vy = ((st["y"] - st["z"]) - (prev["y"] - prev["z"])) * FPS / hpx
+        lag = -0.016 * clamp(vx, -2.5, 2.5)
+        dtb = near_beat(t)
+        kick_ = math.exp(-dtb * 7.0) * math.cos(dtb * 22.0)
+        tw = 2 * math.pi * t
+        p = dict(
+            bend=k * (0.010 * math.sin(tw * 0.21 + ph) + lag),
+            breath=k * (0.011 * math.sin(tw * 0.33 + ph * 1.3) + 0.012 * kick_),
+            nod=k * (1.6 * math.sin(tw * 0.41 + ph * 2.0) + 3.2 * kick_ + 2.4 * clamp(vy, -3, 3)),
+        )
+        if "ears" in cfg:
+            u = ((t + ph) % 3.3) / 3.3
+            flick = math.exp(-(((u - 0.5) / 0.035) ** 2)) * math.sin(t * 44.0)
+            p["ear"] = k * (0.020 * math.sin(tw * 0.8 + ph) + 0.05 * flick + 0.6 * lag)
+            p["ear2"] = k * (0.012 * math.sin(tw * 1.1 + ph * 3.0) + 0.02 * kick_)
+        if "tail" in cfg:
+            p["tail"] = k * (0.07 * math.sin(tw * 0.85 + ph) - 0.6 * lag + 0.03 * kick_)
+        if "skirt" in cfg:
+            p["skirt"] = k * (0.035 * math.sin(tw * 0.7 + ph) + 0.03 * kick_ - 0.5 * lag)
+        if "mane" in cfg or "leaves" in cfg:
+            p["flutter"] = k * (0.012 + 0.01 * kick_)
+            p["phase"] = t * 3.0 + ph
+        if "eyes" in cfg:
+            u = ((t + ph * 0.7) % 3.9) / 0.17                      # a quick blink every ~4 s (a double one now and then)
+            u2 = ((t + ph * 0.7 + 1.7) % 11.0) / 0.17
+            blink = math.sin(math.pi * u) if u < 1.0 else 0.0
+            if u2 < 1.0 and int((t + ph) // 11.0) % 2 == 0:
+                blink = max(blink, math.sin(math.pi * u2))
+            p["blink"] = blink
+        if "arm" in cfg:
+            p["arm"] = 5.0 * math.sin(tw * 0.18 + ph)
+        if "legs" in cfg:
+            p["legs"] = 0.012 + 0.04 * clamp(abs(vx), 0, 1.5)
+            p["phase"] = t * 9.0 + ph
+        return p
+
+    def draw_actor(self, canvas, st, t, amb, rims, extra_alpha=1.0, shadows=True, state_only=False):
+        a = st["actor"]
+        spr = sp.get(st["sprite"])
+        hpx = st["hpx"]
+        x = st["x"] + st["dx"]
+        yb = st["y"] - st["z"] + st["dy"]
+        alpha = st["alpha"] * extra_alpha
+        if a.shadow and st["sc"] > 0.02 and shadows:
+            lift = clamp(st["z"] / max(hpx * 0.9, 1))
+            sgn = -1.0 if st["flip"] else 1.0
+            # faint mirrored reflection in the floor tiles
+            sp.blit(canvas, spr, x, st["y"] + st["z"] + 2, hpx, sx=st["sx"], sy=-st["sy"], rot=-st["rot"],
+                    flip=st["flip"], alpha=0.085 * alpha * (1 - 1.4 * lift) * (0.5 + 0.5 * amb), anchor=a.anchor,
+                    yaw=st["yaw"], blur=1.6, reflect=True, sharpen=False, grain=0, bright=amb)
+            sp.cast_shadow(canvas, spr, x, st["y"], hpx, sx=st["sx"], flip=st["flip"], strength=0.46 * alpha, lift=lift,
+                           dir_x=0.30 * (1 if x < 540 else -1) * 0.8)
+            sw = hpx * a.shadow_w
+            sp.shadow(canvas, x, st["y"], sw * 1.1, 0.30 * alpha, squash=0.26, lift=lift)
+            sp.shadow(canvas, x, st["y"], sw * 0.55, 0.42 * alpha, squash=0.22, lift=lift)
+        rig = None
+        if a.rig_k > 0:
+            prev = a.state(t - 1.0 / FPS, self)
+            rig = self.rig_params(a, st, prev, t)
+        haze = 0.0
+        if a.kind == "floor":
+            haze = clamp((1300 - st["y"]) / 900.0, 0, 1) * 0.20
+        light = dict(amb=amb, haze=haze, haze_col=(140, 146, 154), rims=rims)
+        # fast movers get a short motion smear
+        if prev_speed(a, st, t, self) > 650:
+            for i, (dt_, al) in enumerate(((0.011, 0.30), (0.022, 0.16))):
+                s2 = a.state(t - dt_, self)
+                if s2 is not None:
+                    sp.blit(canvas, sp.get(s2["sprite"]), s2["x"] + s2["dx"], s2["y"] - s2["z"] + s2["dy"], s2["hpx"],
+                            sx=s2["sx"], sy=s2["sy"], rot=s2["rot"], flip=s2["flip"], alpha=al * alpha, anchor=a.anchor,
+                            light=light, yaw=s2["yaw"], blur=2.0, sharpen=False, grain=0, bright=a.bright)
+        sp.blit(canvas, spr, x, yb, hpx, sx=st["sx"], sy=st["sy"], rot=st["rot"], flip=st["flip"], alpha=alpha,
+                flash=st["flash"], anchor=a.anchor, clip=self.room.screen_clip if st["clip"] else None,
+                bright=a.bright, rig=rig, light=light, yaw=st["yaw"], pitch=st["pitch"], blur=a.dof)
+        for (tt0, tt1, n, dt) in a.trails:
+            if tt0 <= t < tt1:
+                for i in range(1, n + 1):
+                    s2 = a.state(t - dt * i, self)
+                    if s2 is None:
+                        continue
+                    sp.blit(canvas, sp.get(s2["sprite"]), s2["x"] + s2["dx"], s2["y"] - s2["z"] + s2["dy"], s2["hpx"],
+                            sx=s2["sx"], sy=s2["sy"], rot=s2["rot"], flip=s2["flip"], alpha=0.30 / i * extra_alpha,
+                            anchor=a.anchor, bright=a.bright, light=light, yaw=s2["yaw"], blur=1.0, sharpen=False,
+                            grain=0)
 
     def capture(self, tc, shrink=0.5):
         """A frame of the film at time tc (for the polaroids), cached per process."""
@@ -219,3 +305,11 @@ class World:
         if fa > 0.004:
             img = cv2.addWeighted(img, 1 - fa, np.full_like(img, col), fa, 0)
         return img
+
+
+def prev_speed(a, st, t, world):
+    """Screen speed (px/s) of an actor over the last frame (0 when unknown)."""
+    p = a.state(t - 1.0 / FPS, world)
+    if p is None:
+        return 0.0
+    return math.hypot(st["x"] + st["dx"] - p["x"] - p["dx"], (st["y"] - st["z"]) - (p["y"] - p["z"])) * FPS
