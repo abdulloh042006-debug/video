@@ -25,8 +25,8 @@ PAD = {
 BONES = {
     # Nick mid-stride, faces LEFT.  "stride" 0 = the pose as drawn, 1 = the mirrored stride
     "nick_walk": [
-        dict(n="legF", p=(0.56, 0.75), t=(0.38, 0.965), r=0.075, vmin=0.74, umax=0.60, ch="stride", rot=-32),
-        dict(n="legB", p=(0.66, 0.75), t=(0.93, 0.93), r=0.075, vmin=0.74, umin=0.60, ch="stride", rot=34),
+        dict(n="legF", p=(0.56, 0.75), t=(0.38, 0.965), r=0.075, vmin=0.74, umax=0.60, ch="stride", rot=-24),
+        dict(n="legB", p=(0.66, 0.75), t=(0.93, 0.93), r=0.075, vmin=0.74, umin=0.60, ch="stride", rot=24),
         dict(n="armF", p=(0.33, 0.53), t=(0.07, 0.69), r=0.05, soft=0.3, ch="stride", rot=-30),
     ],
     # Lion walking toward the camera: knees lift alternately, fists swing
@@ -38,10 +38,11 @@ BONES = {
         dict(n="jaw", mode="warp", p=(0.47, 0.262), t=(0.47, 0.305), r=0.05, soft=1.3, ch="jaw", ty=0.030),
     ],
     "turtle": [
-        dict(n="head", p=(0.335, 0.40), t=(0.12, 0.20), r=0.25, umax=0.335, soft=0.25, ch="head", rot=9, idle=(3, 0.5)),
-        dict(n="legA", p=(0.40, 0.60), t=(0.24, 0.93), r=0.12, vmin=0.56, umax=0.47, ch="legA", rot=24, idle=(3, 0.6)),
-        dict(n="legB", p=(0.62, 0.74), t=(0.72, 0.96), r=0.09, vmin=0.68, umin=0.55, umax=0.80, ch="legB", rot=22, idle=(3, 0.6)),
-        dict(n="legC", p=(0.88, 0.70), t=(0.96, 0.90), r=0.10, vmin=0.66, umin=0.82, ch="legC", rot=22, idle=(3, 0.6)),
+        dict(n="head", p=(0.31, 0.42), t=(0.06, 0.20), r=0.27, umax=0.31, soft=0.25, ch="head", rot=7, idle=(2.5, 0.5)),
+        dict(n="legA", p=(0.31, 0.63), t=(0.20, 0.94), r=0.10, vmin=0.60, umax=0.345, ch="legA", rot=13, idle=(2, 0.6)),
+        dict(n="legA2", p=(0.40, 0.72), t=(0.34, 0.80), r=0.07, vmin=0.69, umin=0.345, umax=0.47, ch="legB", rot=-13, idle=(2, 0.6)),
+        dict(n="legB", p=(0.64, 0.74), t=(0.66, 0.98), r=0.095, vmin=0.70, umin=0.54, umax=0.745, ch="legB", rot=13, idle=(2, 0.6)),
+        dict(n="legC", p=(0.86, 0.68), t=(0.95, 0.90), r=0.10, vmin=0.66, umin=0.76, ch="legC", rot=13, idle=(2, 0.6)),
     ],
     # Flash: the raised hand waves, slowly
     "flash": [

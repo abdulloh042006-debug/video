@@ -57,6 +57,30 @@ JOBS = {
 }
 
 _sessions = {}
+META_PATH = os.path.join(OUT, "meta.json")
+try:
+    import json
+    META = json.load(open(META_PATH))
+except Exception:
+    META = {}
+
+
+def save_meta():
+    import json
+    json.dump(META, open(META_PATH, "w"), indent=1)
+
+
+def source_crop(name):
+    """The exact (upscaled) source pixels a sprite was cut from, trimmed like the sprite: BGR array."""
+    m = META[name]
+    im = load(m["src"]).crop(tuple(m["box"]))
+    if m["scale"] != 1:
+        im = im.resize((im.width * m["scale"], im.height * m["scale"]), Image.LANCZOS)
+    arr = np.array(im)[..., ::-1]
+    tx, ty = m["trim"]
+    return arr[ty:, tx:].copy()
+
+
 
 
 def session(model):
@@ -142,6 +166,8 @@ def cut(name):
         return
     arr = arr[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
     Image.fromarray(arr).save(os.path.join(OUT, name + ".png"))
+    META[name] = dict(src=src, box=list(box), scale=scale, trim=[int(xs.min()), int(ys.min())])
+    save_meta()
     print(name, arr.shape[1], "x", arr.shape[0])
 
 
@@ -160,13 +186,22 @@ def gazelle():
     reg[0:95 * sc, 50 * sc:120 * sc] = True
     cand = reg & (((warm > 16) & (lum < 238)) | (lum < 120))
     reg2 = np.zeros((H, W), bool)
-    reg2[70 * sc:165 * sc, 52 * sc:100 * sc] = True
+    reg2[70 * sc:120 * sc, 52 * sc:82 * sc] = True      # neck only (a wider box pulled in background beside the arm)
     cand |= reg2 & (warm > 7) & (lum < 246)
     head = (cand * 255).astype(np.uint8)
     head = cv2.morphologyEx(head, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21)))
     head = cv2.morphologyEx(head, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
     alpha = np.maximum(rb, head)
-    alpha[75 * sc:, 86 * sc:] = 0              # Fru Fru's hair
+    # the forearm runs through the fog and past a lock of Fru Fru's hair: key its peach colour back in
+    fa = np.zeros((H, W), np.uint8)
+    pts = np.array([(1080, 640), (1097, 640), (1093, 660), (1087, 673), (1075, 673), (1077, 655)], np.float64)
+    cv2.fillPoly(fa, [((pts - [1010, 490]) * sc).round().astype(np.int32)], 255)
+    alpha[(fa > 0) & (warm > 38) & (lum > 105)] = 255
+    alpha[:, 94 * sc:] = 0                     # Fru Fru is right of the elbow (x >= 1104); the elbow itself ends at ~1102
+    # a lock of her dark hair touches Gazelle's forearm: dark, unsaturated pixels there are not Gazelle
+    lock = np.zeros((H, W), bool)
+    lock[(655 - 490) * sc:, (1090 - 1010) * sc:] = True
+    alpha[lock & (lum < 105)] = 0
     alpha = cv2.morphologyEx(alpha, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)))
     n, lab, st, _ = cv2.connectedComponentsWithStats((alpha > 100).astype(np.uint8))
     keep = np.zeros_like(alpha)

@@ -1,0 +1,226 @@
+{
+ "nick_full": {
+  "src": "zoo_neon_street.jpg",
+  "box": [
+   0,
+   540,
+   280,
+   1000
+  ],
+  "scale": 1,
+  "trim": [
+   6,
+   20
+  ]
+ },
+ "judy_full": {
+  "src": "zoo_neon_street.jpg",
+  "box": [
+   250,
+   640,
+   410,
+   1000
+  ],
+  "scale": 1,
+  "trim": [
+   15,
+   23
+  ]
+ },
+ "lion_full": {
+  "src": "zoo_neon_street.jpg",
+  "box": [
+   470,
+   580,
+   730,
+   950
+  ],
+  "scale": 1,
+  "trim": [
+   14,
+   16
+  ]
+ },
+ "nick_arms": {
+  "src": "zoo_sunset.jpg",
+  "box": [
+   300,
+   660,
+   590,
+   1308
+  ],
+  "scale": 1,
+  "trim": [
+   16,
+   16
+  ]
+ },
+ "judy_arms": {
+  "src": "zoo_sunset.jpg",
+  "box": [
+   110,
+   730,
+   350,
+   1308
+  ],
+  "scale": 1,
+  "trim": [
+   72,
+   12
+  ]
+ },
+ "carrot_a": {
+  "src": "zoo_sunset.jpg",
+  "box": [
+   130,
+   230,
+   195,
+   350
+  ],
+  "scale": 2,
+  "trim": [
+   29,
+   65
+  ]
+ },
+ "carrot_b": {
+  "src": "zoo_sunset.jpg",
+  "box": [
+   365,
+   360,
+   440,
+   525
+  ],
+  "scale": 2,
+  "trim": [
+   31,
+   20
+  ]
+ },
+ "flash": {
+  "src": "zoo_lineup_rot.jpg",
+  "box": [
+   490,
+   500,
+   740,
+   736
+  ],
+  "scale": 2,
+  "trim": [
+   6,
+   25
+  ]
+ },
+ "clawhauser": {
+  "src": "zoo_lineup_rot.jpg",
+  "box": [
+   720,
+   505,
+   945,
+   736
+  ],
+  "scale": 2,
+  "trim": [
+   24,
+   30
+  ]
+ },
+ "judy_badge": {
+  "src": "zoo_lineup_rot.jpg",
+  "box": [
+   895,
+   520,
+   1030,
+   736
+  ],
+  "scale": 2,
+  "trim": [
+   54,
+   23
+  ]
+ },
+ "nick_edge": {
+  "src": "zoo_lineup_rot.jpg",
+  "box": [
+   1160,
+   480,
+   1308,
+   736
+  ],
+  "scale": 2,
+  "trim": [
+   25,
+   21
+  ]
+ },
+ "mrbig": {
+  "src": "zoo_lineup_rot.jpg",
+  "box": [
+   300,
+   575,
+   450,
+   736
+  ],
+  "scale": 2,
+  "trim": [
+   13,
+   18
+  ]
+ },
+ "beaver": {
+  "src": "zoo_lineup_rot.jpg",
+  "box": [
+   70,
+   535,
+   245,
+   736
+  ],
+  "scale": 2,
+  "trim": [
+   16,
+   6
+  ]
+ },
+ "nick_walk": {
+  "src": "zoo_city.jpg",
+  "box": [
+   455,
+   1060,
+   680,
+   1295
+  ],
+  "scale": 2,
+  "trim": [
+   34,
+   30
+  ]
+ },
+ "turtle": {
+  "src": "zoo_city.jpg",
+  "box": [
+   315,
+   1180,
+   480,
+   1300
+  ],
+  "scale": 2,
+  "trim": [
+   24,
+   24
+  ]
+ },
+ "mouse_car": {
+  "src": "zoo_city.jpg",
+  "box": [
+   205,
+   1172,
+   308,
+   1300
+  ],
+  "scale": 2,
+  "trim": [
+   18,
+   65
+  ]
+ }
+}

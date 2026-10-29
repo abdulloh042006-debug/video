@@ -417,6 +417,13 @@ class Sprite:
             f3 = (fill & (den[..., 0] > 0.02))[..., None]
             blend = np.clip(1 - a / 255.0, 0, 1)[..., None]
             out = np.where(f3, out * (1 - blend) + est * blend, out)
+        # 5) a limb layer can leave a detached sliver behind: drop components that are tiny next to the body
+        n, lab, stt, _ = cv2.connectedComponentsWithStats((out[..., 3] > 40).astype(np.uint8), connectivity=8)
+        if n > 2:
+            areas = stt[1:, cv2.CC_STAT_AREA]
+            keep = np.concatenate([[False], areas >= 0.02 * areas.max()])
+            if not keep[1:].all():
+                out = out * cv2.dilate(keep[lab].astype(np.uint8), np.ones((3, 3), np.uint8))[..., None]
         return out
 
     # -- lighting ------------------------------------------------------------------------------------

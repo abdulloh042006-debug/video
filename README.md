@@ -89,12 +89,19 @@ Oq “stiker” konturi olib tashlandi, o‘rniga (`engine/sprites.py`, `engine/
 * Beat xaritasi (`beats.json`) librosa bilan chiqarilgan; vizual urg‘ular o‘lchangan kechikish bo‘yicha 40 ms oldinga
   surilgan (3 ms flux bilan tekshirilgan; tayyor videoda flesh/urg‘ular audio onset’dan o‘rtacha ≈10 ms farq qiladi, 84% i ±50 ms ichida).
 
+## Qirqish qoldiqlarini tuzatish
+
+`tools/repair_sprites.py` (cutout → fix_sprites → repair_sprites tartibida) manba rasmlardan qayta tiklaydi:
+Lion o‘ng oyog‘i (oldidagi sloth sababli kesilgan edi), Clawhauser yelkasi, Gazelle tirsagi, toshbaqa oyoqlari va
+yo‘l soyasi, Judy / Nick ko‘zlari va mashina oynasi (shaffof “teshik”lar manbadan to‘ldirildi), Judy badge
+yonidagi begona yengcha parchalari; hamma joyda halo (eski fon rangi) tozalandi. `tools/preview_sprites.py` — kontakt varaq.
+
 ## Qayta yaratish
 
 ```bash
 pip install -r requirements.txt          # + ffmpeg
 python tools/make_plate.py               # fon 1080x1920
-U2NET_HOME=<isnet-general-use.onnx papkasi> python tools/cutout.py && python tools/fix_sprites.py
+U2NET_HOME=<isnet-general-use.onnx papkasi> python tools/cutout.py && python tools/fix_sprites.py && python tools/repair_sprites.py
 python tools/audio_prep.py               # 1:30 kesish + beats.json
 python render.py                         # qisqa montaj -> out/zootopia_intro.mp4  (~5 min, 4 yadro)
 python render.py --long                  # to‘liq 90 s versiya
