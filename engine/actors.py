@@ -61,6 +61,7 @@ class Actor:
         self.clips = []        # (t0, t1, 'screen')
         self.follows = []
         self.trails = []       # (t0, t1, n, dt) ghost copies behind a fast mover
+        self.motions = []      # (t0, t1, fn(t) -> {channel: value}) skeleton motions
         self.shadow_w = 0.5    # contact shadow width as a fraction of the sprite height
         self.flat = False
         self.bright = 1.0
@@ -81,6 +82,60 @@ class Actor:
         _, s0, f0 = self.poses[-1]
         self.poses.append((t, sprite or s0, f0 if flip is None else flip))
         return self
+
+    # ---- skeleton motion channels ------------------------------------------------------------------
+    def motion(self, t0, t1, fn):
+        self.motions.append((t0, t1, fn))
+        return self
+
+    def channels(self, t):
+        out = {}
+        for (t0, t1, fn) in self.motions:
+            if t0 <= t <= t1:
+                for k, v in fn(t).items():
+                    out[k] = out.get(k, 0.0) + v
+        return out
+
+    def walk(self, t0, t1, step_hz=2.4, bob=0.025, arms=True, fade=0.12):
+        """Walk cycle.  step_hz = steps per second.
+        stride 0 -> 1 -> 0 swaps the legs once per step (side-view sprites); legA/legB lift alternately (front-facing)."""
+        def env(t):
+            return clamp((t - t0) / fade) * clamp((t1 - t) / fade)
+
+        def ch(t):
+            e = env(t)
+            ph = math.pi * step_hz * (t - t0)
+            s = math.sin(ph)
+            return dict(stride=(0.5 - 0.5 * math.cos(ph)) * e, legA=s * e, legB=-s * e,
+                        armA=(-s if arms else 0.0) * e, armB=(s if arms else 0.0) * e)
+        self.motion(t0, t1, ch)
+        return self.mod(t0, t1, lambda t, h: dict(zr=bob * abs(math.sin(math.pi * step_hz * (t - t0))) * env(t)))
+
+    def plod(self, t0, t1, hz=1.6, bob=0.012):
+        """Heavy four-legged plod (turtle): legs paddle out of phase, head bobs."""
+        def ch(t):
+            ph = 2 * math.pi * hz * (t - t0)
+            return dict(legA=math.sin(ph), legB=math.sin(ph + 2.1), legC=math.sin(ph + 4.2), head=math.sin(ph * 0.5 + 1.0))
+        self.motion(t0, t1, ch)
+        return self.mod(t0, t1, lambda t, h: dict(zr=bob * abs(math.sin(2 * math.pi * hz * (t - t0) * 0.5))))
+
+    def wave(self, t0, t1, hz=1.4):
+        """Waving hand (channel "wave")."""
+        return self.motion(t0, t1, lambda t: dict(wave=math.sin(2 * math.pi * hz * (t - t0))))
+
+    def roar(self, t0, t1, peak=1.0):
+        """Jaw drops open fast, holds, then closes."""
+        def ch(t):
+            u = (t - t0) / (t1 - t0)
+            v = out_quad(clamp(u / 0.18)) * (1 - clamp((u - 0.7) / 0.3) ** 2)
+            return dict(jaw=peak * v + 0.05 * math.sin((t - t0) * 60) * v)
+        return self.motion(t0, t1, ch)
+
+    def star_jump(self, t0, t1, clock=None):
+        """Legs open while airborne (channel "spread"); `clock` warps time (freeze frames)."""
+        c = clock or (lambda x: x)
+        a, b = c(t0), c(t1)
+        return self.motion(t0, t1, lambda t: dict(spread=math.sin(clamp((c(t) - a) / max(b - a, 1e-6)) * math.pi) ** 0.7))
 
     def trail(self, t0, t1, n=3, dt=0.035):
         self.trails.append((t0, t1, n, dt))

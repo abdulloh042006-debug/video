@@ -46,6 +46,28 @@ def fix(name, y0f, k, xr):
     print(name, "filled", int(new.sum()), "px")
 
 
+def clean_turtle():
+    """The lineup/street cut left a dark smudge next to the hind foot; remove it."""
+    p = os.path.join(SPR, "turtle.png")
+    im = cv2.imread(p, cv2.IMREAD_UNCHANGED)
+    h, w = im.shape[:2]
+    y0, y1, x0, x1 = int(h * 0.78), h, int(w * 0.83), int(w * 0.93)
+    sub = im[y0:y1, x0:x1].astype(int)
+    lum = sub[..., :3].mean(2)
+    sat = sub[..., :3].max(2) - sub[..., :3].min(2)
+    bad = (lum < 75) & (sat < 60)
+    if bad.sum() == 0:
+        print("turtle: nothing to clean")
+        return
+    bad = cv2.dilate(bad.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    im[y0:y1, x0:x1, 3][bad] = 0
+    cv2.imwrite(p, im)
+    print("turtle: removed", int(bad.sum()), "px")
+
+
 if __name__ == "__main__":
-    for n in (sys.argv[1:] or FIX):
+    args = sys.argv[1:]
+    if not args or "turtle" in args:
+        clean_turtle()
+    for n in [a for a in args if a != "turtle"] or ([] if args else list(FIX)):
         fix(n, *FIX[n])

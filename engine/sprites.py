@@ -17,10 +17,12 @@ import cv2
 import numpy as np
 
 from .common import ROOT
+from .rigs import BONES, PAD
 
 SPR_DIR = os.path.join(ROOT, "assets", "sprites")
 
 # sprites whose feet were cut off by the edge of the source picture get a soft fade-out there
+CLEAN = {"turtle", "nick_walk", "flash", "clawhauser", "beaver", "judy_full"}
 FADE_BOTTOM = {"beaver": 0.07, "bellwether": 0.07, "gazelle": 0.04}
 
 # rig geometry in normalised body coordinates (u: 0 left..1 right, v: 0 top..1 bottom)
@@ -62,12 +64,18 @@ class Sprite:
         a = im[..., 3].astype(np.float32) / 255.0
         a = cv2.erode(a, np.ones((2, 2), np.uint8))
         a = cv2.GaussianBlur(a, (0, 0), 0.7)
+        if name in CLEAN:
+            # thin detached fringe lines left over from the matting would be left behind by a moving limb
+            solid_ = (a > 0.5).astype(np.uint8)
+            op_ = cv2.morphologyEx(solid_, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+            keep_ = cv2.dilate(op_, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+            a = a * cv2.GaussianBlur(keep_.astype(np.float32), (0, 0), 0.8)
         fb = FADE_BOTTOM.get(name, 0.0)
         if fb > 0:
             n = max(2, int(a.shape[0] * fb))
             a[-n:] *= np.linspace(1, 0, n, dtype=np.float32)[:, None] ** 1.3
         rgb = im[..., :3].astype(np.float32)
-        pad = 10
+        pad = max(10, int(PAD.get(name, 0.0) * max(a.shape)))
         a = np.pad(a, pad)
         rgb = np.pad(rgb, ((pad, pad), (pad, pad), (0, 0)), mode="edge")
         rgb = self._decontaminate(rgb, a)
@@ -84,6 +92,9 @@ class Sprite:
             self.mips.append(m)
         self._static = {}
         self._grid = {}
+        self._bw = {}
+        self.bone_list = BONES.get(name, [])
+        self.bone_idx = {b["n"]: i for i, b in enumerate(self.bone_list)}
 
     # -- colour bleed from the old background is replaced by colour from inside the character ---
     @staticmethod
@@ -113,14 +124,8 @@ class Sprite:
             self._grid[lvl] = dict(X=X, Y=Y, U=(X - pad) / wb, V=(Y - pad) / hb, wb=wb, hb=hb, pad=pad)
         return self._grid[lvl]
 
-    def static(self, lvl):
-        if lvl in self._static:
-            return self._static[lvl]
-        img = self.mips[lvl]
-        a = img[..., 3] / 255.0
-        h, w = a.shape
+    def _edge_maps(self, a, lvl):
         fac = 2 ** lvl
-        g = self.grid(lvl)
         solid = (a > 0.5).astype(np.uint8)
         dist = cv2.distanceTransform(solid, cv2.DIST_L2, 3)
         band = np.clip(1 - dist / max(2.0, 5.5 / fac), 0, 1) ** 1.8 * (a > 0.3)
@@ -131,11 +136,19 @@ class Sprite:
         nx, ny = -gx / mag, -gy / mag                      # outward normal
         nx[mag < 2e-3] = 0
         ny[mag < 2e-3] = 0
+        return band.astype(np.float32), nx.astype(np.float32), ny.astype(np.float32)
+
+    def static(self, lvl):
+        if lvl in self._static:
+            return self._static[lvl]
+        img = self.mips[lvl]
+        a = img[..., 3] / 255.0
+        g = self.grid(lvl)
+        band, nx, ny = self._edge_maps(a, lvl)
         V = g["V"]
         ao = 1.06 - 0.22 * _s01((V - 0.30) / 0.70)
         ao = ao * (1 - 0.10 * band)
-        s = dict(ao=ao.astype(np.float32), band=band.astype(np.float32), nx=nx.astype(np.float32),
-                 ny=ny.astype(np.float32),
+        s = dict(ao=ao.astype(np.float32), band=band, nx=nx, ny=ny,
                  refl=np.clip(1 - np.clip(1 - V, 0, 2.0) * 1.9, 0, 1).astype(np.float32) ** 1.4)
         self._static[lvl] = s
         return s
@@ -151,8 +164,8 @@ class Sprite:
     def deform(self, lvl, p):
         """Return the level image warped by the rig parameters in `p` (all optional)."""
         img = self.mips[lvl]
-        if not p:
-            return img
+        if not p or not any(v for k, v in p.items() if k not in ("bones", "mouth", "phase")):
+            return self.mouth_overlay(img, lvl, p)
         g = self.grid(lvl)
         U, V, wb, hb = g["U"], g["V"], g["wb"], g["hb"]
         cfg = self.rig
@@ -230,12 +243,188 @@ class Sprite:
         if lg and ls:
             m = _s01((V - lg) / 0.1)
             dy += ls * hb * m * np.sin(U * 13 + p.get("phase", 0.0) * 2)
-        return cv2.remap(img, g["X"] - dx, g["Y"] - dy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
-                         borderValue=(0, 0, 0, 0))
+        out = cv2.remap(img, g["X"] - dx, g["Y"] - dy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
+                        borderValue=(0, 0, 0, 0))
+        return self.mouth_overlay(out, lvl, p)
+
+    # -- open mouth for the roar (painted onto the muzzle before the jaw bone drops the chin) ------------------
+    MOUTH = {"lion_full": (0.47, 0.268, 0.052, 0.040)}
+
+    def mouth_overlay(self, img, lvl, p):
+        m = p.get("mouth", 0.0) if p else 0.0
+        cfg = self.MOUTH.get(self.name)
+        if m < 0.04 or cfg is None:
+            return img
+        g = self.grid(lvl)
+        wb, hb, pad = g["wb"], g["hb"], g["pad"]
+        cu, cv_, rx, ry = cfg
+        cx, cy = pad + cu * wb, pad + cv_ * hb
+        out = img.copy()
+        a = out[..., 3]
+        mask = np.zeros(a.shape, np.float32)
+        K = 8
+        cv2.ellipse(mask, (int(cx * K), int((cy + 0.35 * ry * hb * m) * K)), (int(rx * wb * K), int(ry * hb * m * K)),
+                    0, 0, 360, 1.0, -1, cv2.LINE_AA, 3)
+        mask = cv2.GaussianBlur(mask, (0, 0), max(0.6, 0.0035 * hb))
+        mask *= np.clip(a / 255.0, 0, 1)
+        dark = np.array([28, 22, 70], np.float32)
+        inner = np.zeros(a.shape, np.float32)
+        cv2.ellipse(inner, (int(cx * K), int((cy + 0.62 * ry * hb * m) * K)), (int(0.72 * rx * wb * K), int(0.55 * ry * hb * m * K)),
+                    0, 0, 360, 1.0, -1, cv2.LINE_AA, 3)
+        inner = cv2.GaussianBlur(inner, (0, 0), max(0.6, 0.003 * hb)) * mask
+        tongue = np.array([110, 110, 235], np.float32)
+        for ch in range(3):
+            out[..., ch] = out[..., ch] * (1 - mask) + (dark[ch] * (1 - inner) + tongue[ch] * inner) * mask * (a / 255.0)
+        out[..., 3] = np.maximum(a, mask * 255.0)
+        # upper teeth
+        teeth = np.zeros(a.shape, np.float32)
+        cv2.ellipse(teeth, (int(cx * K), int((cy - 0.55 * ry * hb * m) * K)), (int(0.8 * rx * wb * K), int(0.22 * ry * hb * m * K)),
+                    0, 0, 180, 1.0, -1, cv2.LINE_AA, 3)
+        teeth = cv2.GaussianBlur(teeth, (0, 0), max(0.5, 0.0025 * hb)) * mask
+        for ch in range(3):
+            out[..., ch] = out[..., ch] * (1 - teeth) + 235.0 * teeth
+        return out
+
+    # -- skeleton: split into weighted layers, warp each, composite in z order ------------------------------------
+    def _weights(self, lvl, bones):
+        g = self.grid(lvl)
+        X, Y, wb, hb, pad = g["X"], g["Y"], g["wb"], g["hb"], g["pad"]
+        Vn, Un = (Y - pad) / hb, (X - pad) / wb
+        W = []
+        for b in bones:
+            ax, ay = pad + b["p"][0] * wb, pad + b["p"][1] * hb
+            bx, by = pad + b["t"][0] * wb, pad + b["t"][1] * hb
+            vx, vy = bx - ax, by - ay
+            L2 = max(vx * vx + vy * vy, 1e-6)
+            u = np.clip(((X - ax) * vx + (Y - ay) * vy) / L2, 0, 1)
+            d = np.hypot(X - (ax + u * vx), Y - (ay + u * vy))
+            r = b["r"] * hb
+            soft = max(1.0, b.get("soft", 0.3) * r)
+            w_ = 1 - _s01((d - r) / soft)
+            if b.get("vmin") is not None:
+                w_ = w_ * _s01((Vn - b["vmin"]) / 0.025)
+            if b.get("vmax") is not None:
+                w_ = w_ * (1 - _s01((Vn - b["vmax"]) / 0.025))
+            if b.get("umin") is not None:
+                w_ = w_ * _s01((Un - b["umin"]) / 0.025)
+            if b.get("umax") is not None:
+                w_ = w_ * (1 - _s01((Un - b["umax"]) / 0.025))
+            W.append(w_)
+        if not W:
+            return np.zeros((0,) + X.shape, np.float32)
+        W = np.stack(W).astype(np.float32)
+        W /= np.maximum(1.0, W.sum(0))[None]
+        # soft edge pixels follow the weights of the nearest solid pixel, so a limb never leaves a ghost outline behind
+        a = self.mips[lvl][..., 3] / 255.0
+        solid = a > 0.92
+        if solid.any() and not solid.all():
+            from scipy.ndimage import distance_transform_edt
+            iy, ix = distance_transform_edt(~solid, return_distances=False, return_indices=True)
+            W = W[:, iy, ix]
+        return W
+
+    def bone_weights(self, lvl):
+        if lvl not in self._bw:
+            layer = [b for b in self.bone_list if b.get("mode") != "warp"]
+            warp = [b for b in self.bone_list if b.get("mode") == "warp"]
+            self._bw[lvl] = (layer, self._weights(lvl, layer), warp, self._weights(lvl, warp))
+        return self._bw[lvl]
+
+    def bone_params(self, chan, t):
+        """Channel values -> {bone: (angle_deg, tx, ty)} (tx, ty in body-height fractions)."""
+        out = {}
+        for b in self.bone_list:
+            v = chan.get(b.get("ch"), 0.0)
+            if b.get("rect") == "pos":
+                v = max(0.0, v)
+            elif b.get("rect") == "neg":
+                v = max(0.0, -v)
+            ang = b.get("rot0", 0.0) + b.get("rot", 0.0) * v
+            idle = b.get("idle")
+            if idle:
+                ang += idle[0] * math.sin(2 * math.pi * idle[1] * t + 2.1 * self.bone_idx[b["n"]])
+            out[b["n"]] = (ang, b.get("tx", 0.0) * v, b.get("ty", 0.0) * v)
+        return out
+
+    def apply_bones(self, img, lvl, bp):
+        if not bp:
+            return img
+        layer_b, W, warp_b, WW = self.bone_weights(lvl)
+        g = self.grid(lvl)
+        wb, hb, pad = g["wb"], g["hb"], g["pad"]
+        h, w = img.shape[:2]
+        # 1) smooth stretch bones (jaw, belly ...): continuous displacement, no holes
+        if warp_b:
+            dx = np.zeros((h, w), np.float32)
+            dy = np.zeros((h, w), np.float32)
+            used = False
+            for i, b in enumerate(warp_b):
+                ang, tx, ty = bp.get(b["n"], (0.0, 0.0, 0.0))
+                if abs(tx) > 1e-5 or abs(ty) > 1e-5:
+                    dx += WW[i] * tx * hb
+                    dy += WW[i] * ty * hb
+                    used = True
+            if used:
+                img = cv2.remap(img, g["X"] - dx, g["Y"] - dy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
+                                borderValue=(0, 0, 0, 0))
+        if not layer_b:
+            return img
+        # 2) rigid-ish limbs: one weighted layer per bone
+        mats = {}
+        total = W.sum(0)
+        out = img * (1.0 - total)[..., None]
+        layers = []
+        for i, b in enumerate(layer_b):
+            ang, tx, ty = bp.get(b["n"], (0.0, 0.0, 0.0))
+            cx, cy = pad + b["p"][0] * wb, pad + b["p"][1] * hb
+            th = math.radians(ang)
+            c_, s_ = math.cos(th), math.sin(th)
+            L = np.array([[c_, -s_, cx - (c_ * cx - s_ * cy) + tx * hb], [s_, c_, cy - (s_ * cx + c_ * cy) + ty * hb], [0, 0, 1]])
+            par = b.get("parent")
+            M = mats[par] @ L if par in mats else L
+            mats[b["n"]] = M
+            layer = img * W[i][..., None]
+            if abs(ang) < 1e-3 and abs(tx) < 1e-5 and abs(ty) < 1e-5 and par not in mats:
+                wl = layer
+            else:
+                wl = cv2.warpAffine(layer, M[:2].astype(np.float32), (w, h), flags=cv2.INTER_LINEAR,
+                                    borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+            layers.append(wl)
+            out += wl
+        # 3) where two limbs overlap the plain sum would double the colour: the higher layer wins there
+        over = np.clip((out[..., 3] / 255.0 - 1.04) / 0.2, 0, 1)
+        if over.max() > 0.0:
+            top = np.zeros_like(out)
+            for wl in layers:
+                m = (wl[..., 3] > 110)[..., None]
+                top = np.where(m, wl, top)
+            o3 = over[..., None]
+            out = out * (1 - o3) + top * o3
+        a = np.minimum(out[..., 3], 255.0)
+        out[..., 3] = a
+        np.minimum(out[..., :3], a[..., None], out=out[..., :3])
+        # 4) heal hairline cracks opened between layers (closing on the silhouette, colour from the neighbours)
+        k = max(3, int(9 / 2 ** lvl) | 1)
+        m = (a > 150).astype(np.uint8)
+        closed = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+        fill = (closed > 0) & (a < 235)
+        if fill.any():
+            mf = m.astype(np.float32)
+            num = cv2.GaussianBlur(out * mf[..., None], (0, 0), 1.6 + k / 4)
+            den = cv2.GaussianBlur(mf, (0, 0), 1.6 + k / 4)[..., None]
+            est = num / np.maximum(den, 1e-3)
+            est[..., 3] = 255.0
+            f3 = (fill & (den[..., 0] > 0.02))[..., None]
+            blend = np.clip(1 - a / 255.0, 0, 1)[..., None]
+            out = np.where(f3, out * (1 - blend) + est * blend, out)
+        return out
 
     # -- lighting ------------------------------------------------------------------------------------
-    def lit(self, img, lvl, L):
+    def lit(self, img, lvl, L, dyn=False):
         st = self.static(lvl)
+        if dyn and L.get("rims"):
+            band, nx, ny = self._edge_maps(img[..., 3] / 255.0, lvl)
+            st = dict(st, band=band, nx=nx, ny=ny)
         out = img.copy()
         rgb = out[..., :3]
         rgb *= (st["ao"] * L["amb"])[..., None]
@@ -295,8 +484,11 @@ def blit(canvas, spr, x, y, height, sx=1.0, sy=1.0, rot=0.0, flip=False, alpha=1
     lvl = spr.pick(s * m_ if m_ > 0.05 else s)
     fac = 2 ** lvl
     img = spr.deform(lvl, rig) if rig else spr.mips[lvl]
+    bp = rig.get("bones") if rig else None
+    if bp:
+        img = spr.apply_bones(img, lvl, bp)
     if light is not None:
-        img = spr.lit(img, lvl, light)
+        img = spr.lit(img, lvl, light, dyn=bool(bp))
     if reflect:
         img = img * spr.static(lvl)["refl"][..., None]
     k = s * fac

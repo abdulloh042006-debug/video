@@ -308,6 +308,7 @@ def act1(w):
     nick.mod(n0, n1, lambda t, h: dict(sx=1 + 0.16 * (1 - clamp((t - n0) / (n1 - n0))) ** 1.5,
                                        rot=-4 * (1 - clamp((t - n0) / (n1 - n0)))))
     nick.trail(n0, n1 - 0.2, 4, 0.04)
+    nick.walk(n0 + 0.02, n1 - 0.05, step_hz=7.0, bob=0.035, fade=0.05)
     nick.pose(n1, "nick_full", False)
     nick.impact(n1, 0.2, 0.5, flash=0.12)
     nick.mod(n1, n1 + 0.5, lambda t, h: dict(rot=-7 * math.exp(-(t - n1) * 9) * math.cos((t - n1) * 22)))
@@ -336,6 +337,7 @@ def act1(w):
                                        zr=0.03 * abs(math.sin((t - l0) / 0.43 * math.pi)),
                                        rot=2.6 * math.sin((t - l0) / 0.43 * math.pi)))
     lion.land(l1, 0.12)
+    lion.walk(l0, l1, step_hz=1.0 / 0.4325, bob=0.02, fade=0.2)
     fx_ring(w, l0, (470, 866), rmax=260, col=CYAN, dur=0.5, thick=12)
     fx_sparkles(w, l0, (470, 860), n=6, rad=130, dur=0.6, size=24, seed=51, cols=[CYAN, WHITE, YELLOW])
     for k in range(15, 19):                       # stomps on the way
@@ -349,6 +351,7 @@ def act1(w):
     claw = w.add(Actor("claw", "clawhauser", 0.62, kind="bust", shadow=False))
     k0 = A(19)
     claw.show(k0)
+    claw.wave(k0 + 0.4, k0 + 3.0, hz=1.7)
     claw.move(k0, k0 + 0.42, (ST["claw"][0], 2420), ST["claw"], ease=out_back)
     claw.stay(k0 + 0.42, *ST["claw"])
     fx_ring(w, k0 + 0.15, (ST["claw"][0], 1700), rmax=380, col=YELLOW, dur=0.55, thick=14)
@@ -381,6 +384,7 @@ def act1(w):
     beav.show(d0)
     beav.move(d0, d1, ST["beav"], ST["beav"], arc=2000, arc_ease=lambda u: 1 - in_quad(u))
     beav.land(d1, 0.2, 0.5)
+    beav.wave(d1 + 0.3, d1 + 3.0, hz=1.9)
     fx_ring(w, d1, ST["beav"], rmax=330, col=ORANGE, dur=0.55, thick=14, floor=True)
     fx_burst(w, d1, (ST["beav"][0], ST["beav"][1] - 200), r=240, col=YELLOW, dur=0.3, seed=9, layer="back")
     w.shake(d1, amp=9, dur=0.3)
@@ -391,8 +395,8 @@ def act1(w):
     turt.show(A(26))
     turt.move(A(26), FREEZE + 2.2, (1260, 1770), (-200, 1770), ease=lin)
     turt.hide(FREEZE + 2.4)
-    turt.mod(A(26), FREEZE + 2.2, lambda t, h: dict(zr=0.015 * abs(math.sin((t - A(26)) * 5)),
-                                                    rot=2 * math.sin((t - A(26)) * 5)))
+    turt.plod(A(26), FREEZE + 2.2, hz=1.5, bob=0.012)
+    turt.mod(A(26), FREEZE + 2.2, lambda t, h: dict(rot=1.6 * math.sin((t - A(26)) * 6.5)))
     car = w.add(Actor("car", "mouse_car", 0.45))
     car.show(A(34))
     car.move(A(34), A(35) + 0.1, (-150, 1060), (1250, 1100), ease=in_quad)
@@ -462,6 +466,7 @@ def act1(w):
         return (ST["judy"][0], ST["judy"][1], 230 * 4 * u * (1 - u))
     judy.segs.append((jl0, jl1, judy_leap))
     judy.crouch(jl0 - 0.12, jl0 + 0.02, 0.16)
+    judy.star_jump(jl0, THAW + 0.6, clock=wt)
     judy.land(jl1, 0.2)
     # gazelle is caught mid-pirouette (paper-thin) by the freeze
     gz0 = 19.3
@@ -670,6 +675,8 @@ def act2_v2(w):
     car.mod(B(29), B(29) + 0.52, lambda t, h: dict(rot=0))
     car.mod(B(29) + 0.52, B(31), lambda t, h: dict(zr=0.17, rot=-90 + 4 * math.sin((t - B(29)) * 9) * math.exp(-(t - B(29) - 0.5))))
     # everyone startles
+    for i, k in enumerate(holders):
+        fx_exclaim(w, t_hit + 0.06 + 0.035 * i, (ST[k][0] + 20, ST[k][1] - 1.12 * hpx_of(k)), size=0.26 * hpx_of(k) + 70)
     for k in holders:
         ac = a[k]
         ac.mod(t_hit, t_hit + 0.35, lambda t, h, t_hit=t_hit: dict(
@@ -680,6 +687,19 @@ def act2_v2(w):
         a[k].groove(B(29) + 0.6, B(32), beats=BB, amp=0.03, hop=0.0)
     w.rot.to(t_hit, t_hit + 0.2, 2.5, out_quad)
     w.rot.to(t_hit + 0.2, B(30), 0.0, in_out_cubic)
+
+
+def fx_exclaim(w, t0, pos, size=120, dur=0.9, col=None):
+    """Comic '!' that pops over a startled head, wobbles and pops away."""
+    colr = col or (40, 200, 255)
+
+    def fn(c, t):
+        u = (t - t0) / dur
+        if not 0 <= u < 1:
+            return
+        sc = out_back(clamp(u / 0.18)) * (1 - in_quad(clamp((u - 0.78) / 0.22)))
+        mg.exclaim(c, (pos[0] + 6 * math.sin(u * 34), pos[1] - 16 * math.sin(clamp(u / 0.25) * 1.57)), size * sc, 1.0, colr)
+    w.front(t0, t0 + dur, fn)
 
 
 def fx_sweat(w, t0, pos, size=16, dur=0.7):
@@ -770,6 +790,7 @@ def act2_v3(w):
     w.warm.to(B(44), B(47), 0.0, in_out_quad)
     # the greeting lands: ding
     tg = B(47)
+    fl.wave(tg - 0.1, tg + 2.2, hz=1.5)
     w.punch(tg, 0.04)
     fx_ring(w, tg, (150, 1700), rmax=420, col=YELLOW, dur=0.6, thick=16)
     fx_sparkles(w, tg, (150, 1560), n=10, rad=260, dur=0.8, size=34, seed=611, cols=[YELLOW, WHITE, ORANGE])
@@ -967,7 +988,7 @@ def act2_v5(w):
     w.zoom.to(t0 - 0.05, t0 + 0.3, 1.0, out_cubic)
     w.flash(t0, 0.3, WHITE, 0.7)
     w.punch(t0, 0.05)
-    w.over(t0, t1 + 0.4, lambda c, t: viewfinder(c, t, t0, t1, F))
+    w.over(t0, t1, lambda c, t: viewfinder(c, t, t0, t1, F))
 
     # judy takes the carrot again
     car.follow(B(63), B(72), "judy", off=(0.30, 0, 0.5), rot=18)
@@ -1064,7 +1085,7 @@ def act2_v5(w):
             rot = lerp(0, sr, e) + 25 * in_quad(leave) * (1 if k % 2 else -1)
             wob = 1.0 + 0.03 * math.exp(-(t - ts - 0.5) * 6) * math.sin((t - ts) * 22) if t > ts + 0.5 else 1.0
             mg.paste(c, w.capture(f - 0.04), (cx, cy), scale * wob, rot)
-        w.over(f + 0.06, t1 + 0.6, polaroid)
+        w.over(f + 0.06, t1, polaroid)
     # leaving: transition into the race
     w.flash(t1, 0.2, WHITE, 0.4)
 
@@ -1194,7 +1215,8 @@ def act2_v6(w):
     # the plod
     tw = B(93)
     turt.move(tg, tw, (X0 + 10, Y_TUR), (XF - 10, Y_TUR), ease=lin)
-    turt.mod(tg, tw, lambda t, h: dict(zr=0.02 * abs(math.sin((t - tg) * 6.5)), rot=3.0 * math.sin((t - tg) * 6.5)))
+    turt.plod(tg, tw, hz=2.0, bob=0.018)
+    turt.mod(tg, tw, lambda t, h: dict(rot=2.4 * math.sin((t - tg) * 6.5)))
     for i in range(84, 93, 2):
         face(a["judy"], "judy", B(i), 1 if i % 4 == 0 else -1)
     # sweat drops while everybody waits
@@ -1301,6 +1323,7 @@ def act2_v7(w):
                                                   sy=1 + 0.04 * smooth(clamp((t - (B(99) - 0.1)) / (TR - B(99) + 0.1)))))
     lion.mod(TR, TR + 0.7, lambda t, h: dict(sc=1.07 + 0.3 * math.exp(-(t - TR) * 5) * (1 if t > TR + 0.02 else (t - TR) / 0.02) - 0.07 * clamp((t - TR) / 0.7),
                                                rot=2.5 * math.sin((t - TR) * 60) * math.exp(-(t - TR) * 6)))
+    lion.roar(TR - 0.1, TR + 0.9)
     w.flash(TR, 0.25, WHITE, 0.85)
     w.punch(TR, 0.1, 0.35)
     w.shake(TR, amp=26, dur=0.7, freq=26)
@@ -1651,7 +1674,7 @@ def act3(w):
     turt.pose(C(16), "turtle", False)
     turt.stay(C(16), 1260, 1820)
     turt.move(C(16), C(19), (1260, 1820), (590, 1820), ease=out_cubic)
-    turt.mod(C(16), C(19), lambda t, h: dict(zr=0.02 * abs(math.sin((t - C(16)) * 12)), rot=3 * math.sin((t - C(16)) * 12)))
+    turt.plod(C(16), C(19), hz=2.6, bob=0.02)
     turt.land(C(19), 0.14)
     turt.groove(C(19) + 0.3, 90.0, beats=BC, amp=0.03, hop=0.0)
 

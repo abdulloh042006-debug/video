@@ -165,8 +165,10 @@ class World:
     def rig_params(self, a, st, prev, t):
         """Secondary motion: idle breathing/sway, beat kicks, and drag from the actor's own velocity."""
         cfg = sp.RIG.get(st["sprite"])
-        if cfg is None:
+        spr_ = sp.get(st["sprite"])
+        if cfg is None and not spr_.bone_list:
             return None
+        cfg = cfg or {}
         k, ph = a.rig_k, a.phase
         hpx = max(st["hpx"], 1.0)
         vx = vy = 0.0
@@ -201,7 +203,12 @@ class World:
             if u2 < 1.0 and int((t + ph) // 11.0) % 2 == 0:
                 blink = max(blink, math.sin(math.pi * u2))
             p["blink"] = blink
-        if "arm" in cfg:
+        if spr_.bone_list:
+            chan = a.channels(t)
+            p["bones"] = spr_.bone_params(chan, t + ph)
+            if chan.get("jaw"):
+                p["mouth"] = clamp(chan["jaw"])
+        if "arm" in cfg and not spr_.bone_list:
             p["arm"] = 5.0 * math.sin(tw * 0.18 + ph)
         if "legs" in cfg:
             p["legs"] = 0.012 + 0.04 * clamp(abs(vx), 0, 1.5)

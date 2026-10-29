@@ -1,13 +1,46 @@
-# Zootopia — “Ekran uyg‘onadi” (cinematic intro, 1080×1920, 30 fps, 1:30)
+# Zootopia — “Ekran uyg‘onadi” (qisqa montaj, 1080×1920, 30 fps, 49.6 s)
 
-Fon: sizning xonangiz (proyektor ekrani, yashil stullar, LED panellar). Personajlar: Zootopia rasmlaridan
-qirqib olingan 18 ta sprite. Musiqa: sizning trekingiz, **0:00 → 1:30** da kesilgan.
+Fon: sizning xonangiz (proyektor ekrani, yashil stullar, LED panellar). Personajlar: Zootopia rasmlaridan qirqib olingan
+18 ta sprite, ular endi **skelet bilan jonlantirilgan**. Musiqa: sizning trekingiz (0:00–1:30 qismidan, urg‘ular bo‘yicha kesilgan).
 
 ```
-out/zootopia_intro.mp4     <- tayyor video (H.264 + AAC, 90.0 s, 1080x1920, 30 fps)
+out/zootopia_intro.mp4     <- tayyor qisqa video (H.264 + AAC, 49.6 s, 1080x1920, 30 fps)
+python render.py --long    <- avvalgi to‘liq 90 s versiya (out/zootopia_intro_long.mp4)
 assets/sprites/*.png       <- qirqilgan personajlar (shaffof PNG)  |  assets/sprites_preview.png
 assets/audio/              <- track_90s.m4a (1:30 kesilgan musiqa), beats.json (beat/onset xaritasi)
 ```
+
+## Qisqa montaj (`edit.py`)
+
+Faqat eng quvnoq joylar qoldi, bo‘sh/sekin qismlar kesildi:
+
+| chiqish vaqti | nima |
+|---|---|
+| 0:00–0:01.4 | **HOOK**: kelajakdan 3 ta zarbali kadr (Lion na‘rasi → sabzi proyektorga uriladi → portlash), keyin VHS “orqaga o‘rash” |
+| 0:01.4–0:10 | bo‘sh xonaga sabzi dumalab keladi → Judy ekrandan sakraydi → Nick yurib keladi → Lion yurib chiqadi → hamma yig‘iladi |
+| 0:10–0:16 | build-up, **katta zarba** va musiqa to‘xtab hamma muzlab qolishi (freeze) |
+| 0:16–0:23 | **SABZI O‘YINI**: zanjirli pas, ikki barobar tezlikda, so‘ng proyektorga tegib hamma “!” deb qoladi |
+| 0:23–0:27 | kech kelgan Flash (soat tezlashadi, salomi bit’ga to‘g‘ri keladi) |
+| 0:27–0:34 | **TOSHBAQA POYGASI**: svetofor, sichqon mashinasi uchib o‘tadi, toshbaqa yutadi |
+| 0:34–0:39 | Gazelle solosi → Lion na‘rasi → hamma domino bo‘lib yassilanadi |
+| 0:39–0:43 | nafas → sukunat → **BOOM** |
+| 0:43–0:50 | 3 urg‘uli kombo, kamera whip, katta zarba va final poza |
+
+O‘tishlar: flash-punch, whip-pan, zoom-blur, rang-wipe. Musiqa **bit chegaralarida** kesilib 20 ms crossfade bilan
+ulangan (rasm va ovoz bir xil qismlardan olinadi, shuning uchun sinxron).
+
+## Haqiqiy jonlantirish (skelet / “puppet” animatsiya)
+
+`engine/rigs.py` — har bir personajga suyaklar (kapsula-vaznlar), `engine/sprites.py` — rasm vaznli qatlamlarga
+bo‘linib, har bir qatlam o‘z matritsasi bilan buriladi va z-tartibda birlashtiriladi (yoriqlar avtomatik bitiriladi).
+
+* **Nick** — oyoqlarini almashtirib yuradi, qo‘li tebranadi.  **Lion** — yurganda tizzalari ko‘tariladi, mushtlari
+  tebranadi, na‘ra tortganda jag‘i tushib og‘zi ochiladi (til, tishlar).
+* **Toshbaqa** — 3 oyog‘i navbatma-navbat qadam tashlaydi, boshi tebranadi (poyga).
+* **Flash, Clawhauser, Beaver** — qo‘l silkitadi.  **Judy** — sakrashda oyoqlari ochiladi (star-jump).
+* Hammasida: nafas, quloq/dum/yubka tebranishi, ko‘z qisish, beat’ga javob.
+
+Tashqi AI-video xizmati (Weave) bu hisobga ulanmagani uchun ishlatilmadi; hammasi mahalliy, deterministik.
 
 ## G‘oya
 
@@ -63,7 +96,9 @@ pip install -r requirements.txt          # + ffmpeg
 python tools/make_plate.py               # fon 1080x1920
 U2NET_HOME=<isnet-general-use.onnx papkasi> python tools/cutout.py && python tools/fix_sprites.py
 python tools/audio_prep.py               # 1:30 kesish + beats.json
-python render.py                         # out/zootopia_intro.mp4  (~3 min, 4 yadro)
+python render.py                         # qisqa montaj -> out/zootopia_intro.mp4  (~5 min, 4 yadro)
+python render.py --long                  # to‘liq 90 s versiya
+python edit.py preview /tmp/frames 0 30 400   # montaj kadrlarini ko‘rish
 python tools/peek.py /tmp/frames 3.5 20.3 80.1 89.9   # alohida kadrlarni ko‘rish
 ```
 

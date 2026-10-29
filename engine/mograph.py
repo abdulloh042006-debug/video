@@ -468,3 +468,17 @@ def spotlight(canvas, center, r, dark=0.45, soft=0.55, tint=None):
     if tint is not None:
         out += (mask[..., None] * np.array(tint, np.float32) * 0.12)
     canvas[:] = np.clip(out, 0, 255).astype(np.uint8)
+
+
+def exclaim(canvas, c, size, alpha=1.0, col=(60, 60, 235)):
+    """Comic exclamation mark centred at c: tall tapered bar + dot, bold white outline."""
+    def shape(k, colr, a_):
+        y0, y1 = c[1] - size * 0.5, c[1] + size * 0.10
+        hw_t, hw_b = size * 0.17 * k, size * 0.075 * k
+        y0k, y1k = y0 - (k - 1) * size * 0.25, y1 + (k - 1) * size * 0.25
+        poly(canvas, [(c[0] - hw_t, y0k + hw_t), (c[0] - hw_b, y1k), (c[0] + hw_b, y1k), (c[0] + hw_t, y0k + hw_t)], colr, a_)
+        circle(canvas, (c[0], y0k + hw_t), hw_t, colr, a_)
+        circle(canvas, (c[0], c[1] + size * 0.36), size * 0.105 * k, colr, a_)
+    shape(1.32, WHITE, alpha)
+    shape(1.0, col, alpha)
+    circle(canvas, (c[0] - size * 0.045, c[1] - size * 0.40), size * 0.03, (255, 255, 255), alpha * 0.75)
